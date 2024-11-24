@@ -1,0 +1,24 @@
+{
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"cargo watch -i .gitignore -i 'pkg/*' -s 'wasm-pack build --target web'\" \"vite\"",
+    "build": "npm run build:wasm && vite build",
+    "build:wasm": "wasm-pack build --target web",
+    "preview": "vite preview",
+    "clean": "rm -rf dist pkg",
+    "build:all": "npm run clean && npm run build"
+  },
+  "name": "wasm-worker",
+  "version": "1.0.0",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vite-plugin-top-level-await": "^1.4.4",
+    "vite-plugin-wasm": "^3.3.0",
+    "concurrently": "^8.2.2"
+  }
+}
