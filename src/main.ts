@@ -1,3 +1,4 @@
+// main.ts
 /// <reference types="vite/client" />
 
 // Create and initialize the worker
@@ -10,9 +11,11 @@ worker.postMessage('init');
 
 // Calculator state
 let currentNumber = '';
-let firstNumber: number | null = null;
+let previousResult: number | null = null;
 let operation: string | null = null;
+let expressionChain = '';
 let newNumberStarted = false;
+let isNewOperation = true;
 
 // Display elements
 const resultDisplay = document.getElementById('result')!;
@@ -22,10 +25,32 @@ const num2Display = document.getElementById('num2-display')!;
 
 // Update display function
 function updateDisplay() {
-    resultDisplay.textContent = currentNumber || '0';
-    num1Display.textContent = firstNumber?.toString() || '';
-    operationDisplay.textContent = operation ? getOperationSymbol(operation) : '';
-    num2Display.textContent = operation ? currentNumber : '';
+    // Show current input or result in the main display
+    resultDisplay.textContent = currentNumber || (previousResult?.toString() || '0');
+    
+    // Update expression chain display
+    if (previousResult !== null) {
+        if (operation) {
+            if (isNewOperation) {
+                // Start new operation with previous result
+                expressionChain = previousResult.toString();
+            }
+            num1Display.textContent = expressionChain;
+            operationDisplay.textContent = getOperationSymbol(operation);
+            num2Display.textContent = currentNumber;
+        } else {
+            // After equals, show the complete expression
+            num1Display.textContent = expressionChain;
+            operationDisplay.textContent = ' = ';
+            num2Display.textContent = previousResult.toString();
+        }
+    } else {
+        // Initial number entry
+        num1Display.textContent = currentNumber;
+        operationDisplay.textContent = '';
+        num2Display.textContent = '';
+        expressionChain = currentNumber;
+    }
 }
 
 function getOperationSymbol(op: string): string {
@@ -46,7 +71,7 @@ document.querySelectorAll('button').forEach(button => {
         const action = button.getAttribute('data-action');
 
         if (num) {
-            if (newNumberStarted) {
+            if (newNumberStarted || currentNumber === '0') {
                 currentNumber = num;
                 newNumberStarted = false;
             } else {
@@ -56,29 +81,41 @@ document.querySelectorAll('button').forEach(button => {
             updateDisplay();
         }
         else if (op) {
-            if (currentNumber) {
-                if (firstNumber === null) {
-                    firstNumber = parseFloat(currentNumber);
-                    operation = op;
-                    newNumberStarted = true;
-                } else {
+            if (currentNumber || previousResult !== null) {
+                if (previousResult === null) {
+                    previousResult = parseFloat(currentNumber);
+                    expressionChain = currentNumber;
+                    currentNumber = '';
+                    isNewOperation = false;
+                } else if (currentNumber) {
+                    // Add to expression chain before calculating
+                    expressionChain += getOperationSymbol(operation!) + currentNumber;
                     calculateResult();
-                    operation = op;
+                    isNewOperation = false;
                 }
+                operation = op;
                 updateDisplay();
             }
         }
         else if (action) {
             switch(action) {
                 case 'equals':
-                    calculateResult();
+                    if (currentNumber && operation && previousResult !== null) {
+                        expressionChain += getOperationSymbol(operation) + currentNumber;
+                        calculateResult();
+                        operation = null;
+                        isNewOperation = true;
+                        updateDisplay();
+                    }
                     break;
                 case 'clear':
                     clearCalculator();
                     break;
                 case 'backspace':
-                    currentNumber = currentNumber.slice(0, -1);
-                    updateDisplay();
+                    if (currentNumber) {
+                        currentNumber = currentNumber.slice(0, -1);
+                        updateDisplay();
+                    }
                     break;
             }
         }
@@ -86,8 +123,8 @@ document.querySelectorAll('button').forEach(button => {
 });
 
 function calculateResult() {
-    if (firstNumber !== null && operation && currentNumber) {
-        const a = firstNumber;
+    if (previousResult !== null && operation && currentNumber) {
+        const a = previousResult;
         const b = parseFloat(currentNumber);
 
         worker.postMessage({
@@ -103,9 +140,11 @@ function calculateResult() {
 
 function clearCalculator() {
     currentNumber = '';
-    firstNumber = null;
+    previousResult = null;
     operation = null;
+    expressionChain = '';
     newNumberStarted = false;
+    isNewOperation = true;
     updateDisplay();
 }
 
@@ -115,19 +154,28 @@ worker.onmessage = function(e) {
         console.log('Worker initialized and ready');
     } else if (e.data.type === 'result') {
         const result = e.data.data;
-        currentNumber = Number.isInteger(result) 
+        previousResult = result;
+        currentNumber = '';
+        newNumberStarted = true;
+        
+        // Format the result for display
+        const displayResult = Number.isInteger(result) 
             ? result.toString()
             : result.toFixed(6).replace(/\.?0+$/, '');
-        firstNumber = null;
-        operation = null;
-        newNumberStarted = true;
+        
+        // Update the main result display
+        resultDisplay.textContent = displayResult;
+        
         updateDisplay();
     } else if (e.data.type === 'error') {
         resultDisplay.textContent = `Error: ${e.data.error}`;
         currentNumber = '';
-        firstNumber = null;
+        previousResult = null;
         operation = null;
+        expressionChain = '';
         newNumberStarted = true;
+        isNewOperation = true;
+        updateDisplay();
     }
 };
 
